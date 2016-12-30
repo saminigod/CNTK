@@ -152,6 +152,7 @@ namespace CNTK
     class Utils;
     class PrimitiveFunction;
     class CompositeFunction;
+    class BlockFunction;
     class Function;
     class Variable;
     class Axis;
@@ -239,8 +240,6 @@ namespace CNTK
         int GetComputationNetworkTraceLevel();
 
         CNTK_API void SetGPUMemoryAllocationTraceLevel(int traceLevel);
-
-        CNTK_API void ForceSynchronousCUDAKernelExecutions();
 
         CNTK_API void ForceDeterministicAlgorithms();
         CNTK_API bool ShouldForceDeterministicAlgorithms();

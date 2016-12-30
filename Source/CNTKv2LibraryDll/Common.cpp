@@ -119,11 +119,6 @@ namespace CNTK
                 uids.insert(f1->Uid());
             }
 
-            if((f1->RootFunction() == nullptr) != (f2->RootFunction() == nullptr))
-            {
-                return false;
-            }
-
             if (f1->Name() != f2->Name())
             {
                 return false;
@@ -342,11 +337,6 @@ namespace CNTK
             Microsoft::MSR::CNTK::TracingGPUMemoryAllocator::SetTraceLevel(traceLevel);
         }
 
-        void ForceSynchronousCUDAKernelExecutions()
-        {
-            Microsoft::MSR::CNTK::SyncGuard::EnableSync();
-        }
-
         void ForceDeterministicAlgorithms()
         {
             Microsoft::MSR::CNTK::Globals::ForceDeterministicAlgorithms();
@@ -459,7 +449,8 @@ namespace CNTK
     /*static*/ const int Axis::SentinelStaticAxisIndexValueForDynamicAxes = std::numeric_limits<int>::max();
     /*static*/ const int Axis::SentinelStaticAxisIndexValueForAllStaticAxes = std::numeric_limits<int>::max() - 1;
     /*static*/ const int Axis::SentinelStaticAxisIndexValueForUnknownAxes = std::numeric_limits<int>::max() - 2;
-
+    /*static*/ const int Axis::SentinelEndStaticAxisIndexValue = std::numeric_limits<int>::max() - 3;
+    
     /*static*/ Axis::UniqueDynamicAxesNames Axis::s_uniqueDynamicAxisNames;
 
     static std::shared_ptr<std::vector<Axis>> s_defaultInputVariableDynamicAxes, s_unknownDynamicAxes;
