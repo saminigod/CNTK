@@ -291,10 +291,14 @@ void GPUSparseMatrix<ElemType>::CopyToDenseMatrix(GPUMatrix<ElemType>& denseMatr
             CUSPARSE_CALL(cusparseDcsc2dense(cusparseHandle, int(GetNumRows()), int(GetNumCols()), descr, (double*) Buffer(), RowLocation(), ColLocation(), (double*) denseMatrix.Data(), int(GetNumRows())));
         }
     }
-    else if (GetFormat() == MatrixFormat::matrixFormatSparseBlockCol)
+    else if (GetFormat() == MatrixFormat::matrixFormatSparseBlockCol || GetFormat() == MatrixFormat::matrixFormatSparseBlockRow)
     {
         denseMatrix.SetValue((ElemType)0);
         ScaleAndAdd(1, *this, denseMatrix);
+    }
+    else
+    {
+        NOT_IMPLEMENTED;
     }
     CUSPARSE_CALL(cusparseDestroy(cusparseHandle));
 
@@ -1490,13 +1494,13 @@ ElemType GPUSparseMatrix<ElemType>::Adagrad(GPUMatrix<ElemType>& c, const bool n
     if (sizeof(ElemType) == sizeof(float))
     {
         float aveMultiplier = 0;
-        CUBLAS_CALL(cublasSasum(cuHandle, (CUDA_LONG) nz, reinterpret_cast<float*>(multipliers), 1, &aveMultiplier));
+        CUBLAS_CALL(cublasSasum(cuHandle, (LONG64) nz, reinterpret_cast<float*>(multipliers), 1, &aveMultiplier));
         return (ElemType) aveMultiplier / nz;
     }
     else
     {
         double aveMultiplier = 0;
-        CUBLAS_CALL(cublasDasum(cuHandle, (CUDA_LONG) nz, reinterpret_cast<double*>(multipliers), 1, &aveMultiplier));
+        CUBLAS_CALL(cublasDasum(cuHandle, (LONG64) nz, reinterpret_cast<double*>(multipliers), 1, &aveMultiplier));
         return (ElemType) aveMultiplier / nz;
     }
 }

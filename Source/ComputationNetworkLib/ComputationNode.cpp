@@ -700,13 +700,15 @@ void ComputationNode<ElemType>::WriteMinibatchWithFormatting(FILE* f, const Fram
                 // the concise version to make matrix comparision easier
                 double absSum = 0;
                 
-                #pragma omp parallel for
+                #pragma omp parallel for reduction(+:absSum)
                 for (int i = 0; i < (int)iend; i++) // loop over output rows
                 {
+                    double absSumLocal = 0;
                     for (size_t j = 0; j < jend; j++) // loop over elements
                     {
-                        absSum += abs(seqData[i * istride + j * jstride]);
+                        absSumLocal += abs(seqData[i * istride + j * jstride]);
                     }
+                    absSum += absSumLocal;
                 }
                 fprintfOrDie(f, "absSum: %f", absSum);
             }
