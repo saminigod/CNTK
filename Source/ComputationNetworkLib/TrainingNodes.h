@@ -2637,7 +2637,7 @@ public:
             {
                 auto shape = GetSampleLayout();
                 m_bnEng = BatchNormEngine<ElemType>::Create(m_deviceId, shape, m_spatial, m_imageLayoutKind,
-                                                            m_useCntkEngine ? BatchNormEngineKind::Cntk : BatchNormEngineKind::CuDnn);
+                    (m_useCntkEngine || m_deviceId == CPUDEVICE) ? BatchNormEngineKind::Cntk : BatchNormEngineKind::CuDnn);
             }
         }
     }
