@@ -10,64 +10,58 @@ precision = "float"; traceLevel = 1 ; deviceId = "auto"
 rootDir = ".." ; dataDir = "$rootDir$/DataSets/MNIST" ;
 outputDir = "./Output" ;
 
-modelPath = "$outputDir$/Models/04_OneConvBN"
-#stderr = "$outputDir$/04_OneConvBN_bs_out"
+modelPath = "$outputDir$/Models/07_Deconvolution"
+#stderr = "$outputDir$/07_Deconvolution_bs_out"
 
 # TRAINING CONFIG
 trainNetwork = {
     action = "train"
     
     BrainScriptNetworkBuilder = {
+        model = inputFeatures => {
+            c1      = ConvolutionalLayer {16, (5:5), pad = true}(inputFeatures)
+            r1      = ReLU(c1)
+            p1      = MaxPoolingLayer {(2:2), stride=(2:2)}(r1)
+            unpool1 = MaxUnpooling(p1, r1, (2:2:1), stride=(2:2:1), autoPadding=(false:false:false), lowerPad=0, upperPad=0)
+            W       = ParameterTensor{(1:5:5:16), init="uniform", initValueScale=0.1, initOnCPUOnly=true}
+            deconv  = Convolution(W, unpool1, (5:5:1), mapDims=16, stride=(1:1), sharing=(true:true:true), autoPadding=(false:false:false), lowerPad=(2:2:0), upperPad=(2:2:0), deconv=true)
+        }.deconv
+
+        # inputs
         imageShape = 28:28:1                        # image dimensions, 1 channel only
-        labelDim = 10                               # number of distinct labels
+        features = Input {imageShape}
+
         featScale = 1/256
         Scale{f} = x => Constant(f) .* x
-        
-        # define a custom layer with 5x5 convolution, batch norm, relu and 2x2 max pooling
-        ConvBnReluPoolLayer {outChannels, filterShape} = Sequential (
-            ConvolutionalLayer      {outChannels, filterShape, pad=true, bias=false} :
-            BatchNormalizationLayer {spatialRank = 2} :
-            ReLU :
-            MaxPoolingLayer         {(2:2), stride = (2:2)} 
-        )
 
-        DenseBnReluLayer {outDim} = Sequential (
-            LinearLayer             {outDim} :   
-            BatchNormalizationLayer {spatialRank = 1} : ReLU
-        )
-		
-        model = Sequential (
-            Scale {featScale} : 
-            ConvBnReluPoolLayer {16, (5:5)} : 
-            DenseBnReluLayer {64} : 
-            LinearLayer {labelDim}
-        )
+        #Scale = x => (1.0 / 256.0) .* x
+        #featScaled = Scale (features)
         
-        # inputs
-        features = Input {imageShape}
-        labels = Input {labelDim}
-
         # apply model to features
-        ol = model (features)
+        f1 = Scale{featScale} (features)
+        z = model (f1)
 
-        # loss and error computation
-        ce   = CrossEntropyWithSoftmax (labels, ol)
-        errs = ClassificationError (labels, ol)
-
-        # declare special nodes
-        featureNodes    = (features)
-        labelNodes      = (labels)
-        criterionNodes  = (ce)
-        evaluationNodes = (errs)
-        outputNodes     = (ol)
-    }
+        # loss and special nodes
+        f2 = Scale{featScale} (features)
+        err = z - f2 #featScaled
+        sqErr = err .* err
+        mse = ReduceMean(sqErr)
+        rmse = Sqrt(mse)
+        
+        featureNodes = (features)
+        criterionNodes = (rmse)
+   }
 
     SGD = {
         epochSize = 60000
         minibatchSize = 64
         maxEpochs = 10
-        learningRatesPerSample = 0.01*5:0.001
-        momentumAsTimeConstant = 0
+        
+        learningRatesPerMB = 0.01
+        momentumPerMB = 0.9
+        #learningRatesPerSample = 0.001*5:0.0005
+        #momentumAsTimeConstant = 0
+        
         numMBsToShowResult = 500
     }
 
