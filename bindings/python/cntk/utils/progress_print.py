@@ -16,14 +16,14 @@ class ProgressPrinter(object):
     It provides the number of samples, average loss and average metric
     since the last print or since the start of accumulation.
     '''
-    def __init__(self, freq=None, first=0, tag='', log_to_file=None, distributed_learner=None, gen_heartbeat=False, num_epochs=300):
+    def __init__(self, freq=None, first=0, tag='', log_to_file=None, rank=None, gen_heartbeat=False, num_epochs=300):
         '''
         Constructor. The optional ``freq`` parameter determines how often
         printing will occur. The value of 0 means an geometric
         schedule (1,2,4,...). A value > 0 means a arithmetic schedule
         (freq, 2*freq, 3*freq,...), and a value of None means no per-minibatch log.
         set log_to_file if you want the output to go file instead of stdout.
-        set distributed_learner to your learner if you are using distibuted parallelism -- each rank's log will go to seperate file.
+        set rank to distributed.rank if you are using distibuted parallelism -- each rank's log will go to seperate file.
         '''
         from sys import maxsize
         if freq is None:
@@ -43,7 +43,7 @@ class ProgressPrinter(object):
         self.epoch_start_time = 0
         self.progress_timer_time = 0
         self.log_to_file = log_to_file
-        self.distributed_learner = distributed_learner
+        self.rank = rank
         self.gen_heartbeat = gen_heartbeat
         self.num_epochs =  num_epochs
 
@@ -51,8 +51,8 @@ class ProgressPrinter(object):
         if self.log_to_file != None:
             self.logfilename = self.log_to_file
 
-            if self.distributed_learner != None:
-                self.logfilename = self.logfilename + "rank" + str(self.distributed_learner.communicator().current_worker().global_rank)
+            if self.rank != None:
+                self.logfilename = self.logfilename + "rank" + str(self.global_rank)
 
             # print to stdout
             print("Redirecting log to file " + self.logfilename)
@@ -214,7 +214,6 @@ class ProgressPrinter(object):
             else:
                 self.___logprint(' Minibatch[{:4d}-{:4d}]: loss = {:0.6f} * {:d}'.format(
                     first_mb, self.updates, avg_loss, samples))
-
     def update_with_trainer(self, trainer, with_metric=False):
         '''
         Updates the accumulators using the loss, the minibatch_size and optionally the metric
