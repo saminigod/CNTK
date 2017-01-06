@@ -334,19 +334,12 @@ def test_op_hardmax(sample, device_id, precision):
     _test_unary_op(precision, device_id, hardmax, sample,
                    expected_forward, expected_backward)
                    
-#@pytest.mark.parametrize("use_cudnn", [True, False])
-#@pytest.mark.parametrize("sample", SAMPLES)
-#def test_op_batch_normalization(use_cudnn, sample, device_id, precision):
-def test_op_batch_normalization(device_id, precision):
-    use_cudnn = True
-    sample = [1,1,2,3]
+@pytest.mark.parametrize("use_cudnn", [True, False])
+@pytest.mark.parametrize("sample", SAMPLES)
+def test_op_batch_normalization(use_cudnn, sample, device_id, precision):
     dev = cntk_device(device_id)
     dtype = PRECISION_TO_TYPE[precision]
     epsilon = 0.00001
-
-    from cntk import cntk_py
-    cntk_py.set_computation_network_trace_level(1000000)
-    cntk_py.set_gpumemory_allocation_trace_level(1)
 
     t = AA(sample, dtype=dtype).reshape(-1,1,1)
     mean = 1
@@ -358,10 +351,9 @@ def test_op_batch_normalization(device_id, precision):
 
     expected_forward = AA(forward)
 
-    #scale = Parameter(shape=(1), init=init_scale, dtype=dtype, device=dev)
-    bias  = Parameter(shape=(1), init=init_bias, dtype=dtype, device=dev)
+    # batch_normalization eval don't support learnable scale/bias, so make them Constant
     scale        = Constant(init_scale, shape=(1), dtype=dtype, device=dev)
-    #bias         = Constant(init_bias, shape=(1), dtype=dtype, device=dev)
+    bias         = Constant(init_bias, shape=(1), dtype=dtype, device=dev)
     run_mean     = Constant(mean, shape=(1), dtype=dtype, device=dev)
     run_variance = Constant(var, shape=(1), dtype=dtype, device=dev)
 
