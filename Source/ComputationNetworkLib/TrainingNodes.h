@@ -2626,6 +2626,25 @@ public:
                     "Please specify imageLayout=\"cudnn\" in BatchNormalization node in your NDL/BrainScript "
                     "and make sure your input data layout is CHW", NodeName().c_str(), OperationName().c_str());
             }
+
+            if (!m_useCntkEngine)
+            {
+                // Fallback to cntk engine on CPU device since cuDnn is not available,
+                bool cpuDevice = (m_deviceId == CPUDEVICE);
+
+                // or if parameters cannot be handled by cuDnn (which is needed for compatibility when changing the default to cudnn)
+                // In Source/Math/CuDnnBatchNormalization.cu :
+                //   if (blendFactor != 0 && (blendFactor != 1 || expAvgFactor > 0))
+                //      InvalidArgument("cuDNN batch normalization engine currently supports blendTimeConstant of 0 or 1 only.");
+                // Check ComputeBlendFactor()/ComputeExpAvgFactor() for inferring blendFactor/expAvgFactor from m_blendTimeConst/m_normTimeConst
+                bool cuDnnUnsupportedParams = (m_blendTimeConst != 0 && (isfinite(m_blendTimeConst) || isfinite(m_normTimeConst)));
+
+                if (cpuDevice || cuDnnUnsupportedParams)
+                {
+                    m_useCntkEngine = true;
+                }
+            }
+
             double cudnnMinEps = 1e-5; // CUDNN_BN_MIN_EPSILON
             if (!m_useCntkEngine && m_epsilon < cudnnMinEps) 
                 fprintf(stderr, "\nWARNING: cuDNN batch normalization requires epsilon >= %e. Epsilon will be reset to that value.\n", cudnnMinEps);
@@ -2637,7 +2656,7 @@ public:
             {
                 auto shape = GetSampleLayout();
                 m_bnEng = BatchNormEngine<ElemType>::Create(m_deviceId, shape, m_spatial, m_imageLayoutKind,
-                    (m_useCntkEngine || m_deviceId == CPUDEVICE) ? BatchNormEngineKind::Cntk : BatchNormEngineKind::CuDnn);
+                                                            m_useCntkEngine ? BatchNormEngineKind::Cntk : BatchNormEngineKind::CuDnn);
             }
         }
     }
