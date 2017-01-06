@@ -789,174 +789,6 @@ namespace CNTK
         std::shared_ptr<Microsoft::MSR::CNTK::Matrix<char>> m_matrixView;
     };
 
-    /// 
-    /// Denotes a multi-dimensional array with an optional mask and is the actual data fed into or produced from a computation.
-    /// The mask is typically lower dimensionality than the data, meaning data is masked in coarse individual sample units where
-    /// sample shape is data.Shape().SubShape(0, data.Shape().Rank() - mask.Shape().Rank)
-    /// Also, note that the size of the data's trailing mask.Shape().Rank() dimensions must match the mask shape dimensions.
-    /// 
-    class Value : public std::enable_shared_from_this<Value>
-    {
-    public:
-        ///
-        /// A multi-dimensional value with no mask.
-        ///
-        CNTK_API Value(const NDArrayViewPtr& data);
-
-        ///
-        /// A multi-dimensional value with an associated mask.
-        ///
-        CNTK_API Value(const NDArrayViewPtr& data, const NDMaskPtr& mask);
-
-        ///
-        /// Create a new Value object containing a collection of variable length sequences.
-        /// The sequenceStartFlags argument allows specifying for each sequence whether that sequence is a 
-        /// a new sequence or continuation of a previous sequence at the same index in the
-        /// sequences vector from a previous call to this method.
-        /// The created Value object contains a copy of the specified 'sequences' data.
-        ///
-        template <typename ElementType>
-        CNTK_API static ValuePtr Create(const NDShape& sampleShape, const std::vector<std::vector<ElementType>>& sequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false);
-
-        ///
-        /// Create a new Value object containing a collection of variable length sequences.
-        /// The created Value object contains a copy of the specified 'sequences' data.
-        ///
-        template <typename ElementType>
-        static ValuePtr Create(const NDShape& sampleShape, const std::vector<std::vector<ElementType>>& sequences, const DeviceDescriptor& device, bool readOnly = false)
-        {
-            return Create(sampleShape, sequences, {}, device, readOnly);
-        }
-
-        ///
-        /// Create a new Value object containing a collection of variable length sequences.
-        /// The created Value object contains a copy of the specified 'sequences' data.
-        ///
-        static ValuePtr Create(const NDShape& sampleShape, const std::vector<NDArrayViewPtr>& sequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false)
-        {
-            return Create(sampleShape, sequences, sequenceStartFlags, device, readOnly, /*createNewCopy =*/ false);
-        }
-
-        ///
-        /// Create a new Value object containing a collection of variable length sequences.
-        /// The created Value object contains a copy of the specified 'sequences' data.
-        ///
-        static ValuePtr Create(const NDShape& sampleShape, const std::vector<NDArrayViewPtr>& sequences, const DeviceDescriptor& device, bool readOnly = false)
-        {
-            return Create(sampleShape, sequences, {}, device, readOnly);
-        }
-
-        ///
-        /// Create a new Value object containing a collection of variable length sequences of one hot vectors
-        /// The created Value object contains a copy of the specified 'sequences' data.
-        ///
-        template <typename ElementType>
-        CNTK_API static ValuePtr Create(size_t vocabularySize, const std::vector<std::vector<size_t>>& oneHotSequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false);
-
-        ///
-        /// Create a new Value object containing a collection of variable length sequences of one hot vectors
-        /// The created Value object contains a copy of the specified 'sequences' data.
-        ///
-        template <typename ElementType>
-        static ValuePtr Create(size_t vocabularySize, const std::vector<std::vector<size_t>>& oneHotSequences, const DeviceDescriptor& device, bool readOnly = false)
-        {
-            return Create<ElementType>(vocabularySize, oneHotSequences, {}, device, readOnly);
-        }
-
-        ///
-        /// Destruct 'this' Value object.
-        ///
-        virtual ~Value();
-
-        ///
-        /// Returns the descriptor of the device that 'this' Value resides on
-        ///
-        virtual DeviceDescriptor Device() const { return m_data->Device(); }
-
-        ///
-        /// Returns the data type of 'this' Value's contents.
-        ///
-        virtual DataType GetDataType() const { return m_data->GetDataType(); }
-
-        ///
-        /// Returns the storage format of 'this' Value.
-        ///
-        virtual StorageFormat GetStorageFormat() const { return m_data->GetStorageFormat(); }
-
-        ///
-        /// Returns the shape 'this' Value.
-        ///
-        virtual const NDShape& Shape() const { return m_data->Shape(); }
-
-        ///
-        /// Returns a boolean indicating if 'this' Value contains data in sparse storage format.
-        ///
-        bool IsSparse() const
-        {
-            return (GetStorageFormat() != StorageFormat::Dense);
-        }
-
-        ///
-        /// Returns a boolean indicating if 'this' Value is read-only.
-        ///
-        virtual bool IsReadOnly() const { return m_data->IsReadOnly(); }
-
-        ///
-        /// Returns the number of masked/invalid values
-        ///
-        virtual size_t MaskedCount() const 
-        {
-            return m_mask ? m_mask->MaskedCount() : 0;
-        }
-
-        ///
-        /// Returns the NDArrayView object corresponding to the data contents of 'this value object.
-        ///
-        virtual NDArrayViewPtr Data() const;
-
-        ///
-        /// Returns the NDMask object corresponding to the mask associated with 'this value object.
-        ///
-        virtual NDMaskPtr Mask() const;
-
-        ///
-        /// Creates a new Value with newly allocated storage on the same device as 'this' Value and copies 'this' Value's contents into the newly allocated Value.
-        ///
-        virtual ValuePtr DeepClone(bool readOnly) const;
-
-        ///
-        /// Creates a new Value with newly allocated storage on the same device as 'this' Value and copies 'this' Value's contents into the newly allocated Value.
-        ///
-        ValuePtr DeepClone() const
-        {
-            return DeepClone(IsReadOnly());
-        }
-
-        ///
-        /// Creates a new Value which is an alias of 'this' Value.
-        ///
-        virtual ValuePtr Alias(bool readOnly = false) const;
-
-        ///
-        /// Copies the contents of the 'source' Value to 'this' Value.
-        /// The shapes of the 'source' Value's data and mask must be identical to 'this' Value's data and mask.
-        ///
-        virtual void CopyFrom(const Value& source);
-
-    private:
-        template <typename ElementType>
-        static void AppendSparseSequenceData(const NDArrayViewPtr& sequenceData, std::vector<SparseIndexType>& colStarts, std::vector<SparseIndexType>& rowIndices, std::vector<char>& nonZeroValues, size_t maxSequenceLength);
-
-        CNTK_API static ValuePtr Create(const NDShape& sampleShape, const std::vector<NDArrayViewPtr>& sequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly, bool createNewCopy);
-
-        // Disallow copy and move construction and assignment
-        Value(const Value&) = delete; Value& operator=(const Value&) = delete; Value(Value&&) = delete; Value& operator=(Value&&) = delete;
-
-    protected:
-        mutable NDArrayViewPtr m_data;
-        mutable NDMaskPtr m_mask;
-    };
-
     ///
     /// Denotes an Axis of a Variable and is used for specifying the axes parameters of certain Functions such as reductions.
     /// Besides the static axes corresponding to each of the axes of the Variable's shape, Variables of kind 'Input' and any 
@@ -1805,7 +1637,7 @@ private:
     private:
 #ifdef SWIGCSHARP
     public:
-        // Todo: a better way to get hash value?
+        // TODO: a better way to get hash value?
         size_t GetHashValue()
         {
             return std::hash<const void *>()(m_dataFields.get());
@@ -2164,6 +1996,305 @@ namespace std {
 
 namespace CNTK
 {
+    /// 
+    /// Denotes a multi-dimensional array with an optional mask and is the actual data fed into or produced from a computation.
+    /// The mask is typically lower dimensionality than the data, meaning data is masked in coarse individual sample units where
+    /// sample shape is data.Shape().SubShape(0, data.Shape().Rank() - mask.Shape().Rank)
+    /// Also, note that the size of the data's trailing mask.Shape().Rank() dimensions must match the mask shape dimensions.
+    /// 
+    class Value : public std::enable_shared_from_this<Value>
+    {
+    public:
+        ///
+        /// A multi-dimensional value with no mask.
+        ///
+        CNTK_API Value(const NDArrayViewPtr& data);
+
+        ///
+        /// A multi-dimensional value with an associated mask.
+        ///
+        CNTK_API Value(const NDArrayViewPtr& data, const NDMaskPtr& mask);
+
+        ///
+        /// Create a new Value object containing a collection of variable length sequences.
+        /// The sequenceStartFlags argument allows specifying for each sequence whether that sequence is a 
+        /// a new sequence or continuation of a previous sequence at the same index in the
+        /// sequences vector from a previous call to this method.
+        /// The created Value object contains a copy of the specified 'sequences' data.
+        ///
+        template <typename ElementType>
+        CNTK_API static ValuePtr Create(const NDShape& sampleShape, const std::vector<std::vector<ElementType>>& sequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false);
+
+        ///
+        /// Create a new Value object containing a collection of variable length sequences.
+        /// The created Value object contains a copy of the specified 'sequences' data.
+        ///
+        template <typename ElementType>
+        static ValuePtr Create(const NDShape& sampleShape, const std::vector<std::vector<ElementType>>& sequences, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create(sampleShape, sequences, {}, device, readOnly);
+        }
+
+        ///
+        /// Create a new Value object containing a collection of variable length sequences.
+        /// The created Value object contains a copy of the specified 'sequences' data.
+        ///
+        static ValuePtr Create(const NDShape& sampleShape, const std::vector<NDArrayViewPtr>& sequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create(sampleShape, sequences, sequenceStartFlags, device, readOnly, /*createNewCopy =*/ false);
+        }
+
+        ///
+        /// Create a new Value object containing a collection of variable length sequences.
+        /// The created Value object contains a copy of the specified 'sequences' data.
+        ///
+        static ValuePtr Create(const NDShape& sampleShape, const std::vector<NDArrayViewPtr>& sequences, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create(sampleShape, sequences, {}, device, readOnly);
+        }
+
+        ///
+        /// Create a new Value object containing a collection of variable length sequences of one hot vectors
+        /// The created Value object contains a copy of the specified 'sequences' data.
+        ///
+        template <typename ElementType>
+        CNTK_API static ValuePtr Create(size_t vocabularySize, const std::vector<std::vector<size_t>>& oneHotSequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly = false);
+
+        ///
+        /// Create a new Value object containing a collection of variable length sequences of one hot vectors
+        /// The created Value object contains a copy of the specified 'sequences' data.
+        ///
+        template <typename ElementType>
+        static ValuePtr Create(size_t vocabularySize, const std::vector<std::vector<size_t>>& oneHotSequences, const DeviceDescriptor& device, bool readOnly = false)
+        {
+            return Create<ElementType>(vocabularySize, oneHotSequences, {}, device, readOnly);
+        }
+
+        ///
+        /// Destruct 'this' Value object.
+        ///
+        virtual ~Value();
+
+        ///
+        /// Returns the descriptor of the device that 'this' Value resides on
+        ///
+        virtual DeviceDescriptor Device() const { return m_data->Device(); }
+
+        ///
+        /// Returns the data type of 'this' Value's contents.
+        ///
+        virtual DataType GetDataType() const { return m_data->GetDataType(); }
+
+        ///
+        /// Returns the storage format of 'this' Value.
+        ///
+        virtual StorageFormat GetStorageFormat() const { return m_data->GetStorageFormat(); }
+
+        ///
+        /// Returns the shape 'this' Value.
+        ///
+        virtual const NDShape& Shape() const { return m_data->Shape(); }
+
+        ///
+        /// Returns a boolean indicating if 'this' Value contains data in sparse storage format.
+        ///
+        bool IsSparse() const { return (GetStorageFormat() != StorageFormat::Dense); }
+
+        ///
+        /// Returns a boolean indicating if 'this' Value is read-only.
+        ///
+        virtual bool IsReadOnly() const { return m_data->IsReadOnly(); }
+
+        ///
+        /// Returns the number of masked/invalid values
+        ///
+        virtual size_t MaskedCount() const { return m_mask ? m_mask->MaskedCount() : 0; }
+
+        ///
+        /// Returns the NDArrayView object corresponding to the data contents of 'this value object.
+        ///
+        virtual NDArrayViewPtr Data() const;
+
+        ///
+        /// Returns the NDMask object corresponding to the mask associated with 'this value object.
+        ///
+        virtual NDMaskPtr Mask() const;
+
+        ///
+        /// Creates a new Value with newly allocated storage on the same device as 'this' Value and copies 'this' Value's contents into the newly allocated Value.
+        ///
+        virtual ValuePtr DeepClone(bool readOnly) const;
+
+        ///
+        /// Creates a new Value with newly allocated storage on the same device as 'this' Value and copies 'this' Value's contents into the newly allocated Value.
+        ///
+        ValuePtr DeepClone() const { return DeepClone(IsReadOnly()); }
+
+        ///
+        /// Creates a new Value which is an alias of 'this' Value.
+        ///
+        virtual ValuePtr Alias(bool readOnly = false) const;
+
+        ///
+        /// Copies the contents of the 'source' Value to 'this' Value.
+        /// The shapes of the 'source' Value's data and mask must be identical to 'this' Value's data and mask.
+        ///
+        virtual void CopyFrom(const Value& source);
+
+        ///
+        /// Copy the data stored in the Value object to the buffer 'sequences' as a collection of variable length sequences.
+        /// The sequence buffer will be resized if necessary.
+        /// The Value should have the same tensor shape as outputVariable.
+        ///
+        template <typename ElementType>
+        void CopyVariableValueTo(const Variable& outputVariable, std::vector<std::vector<ElementType>>& sequences)
+        {
+            if (outputVariable.GetDataType() != GetDataType())
+                InvalidArgument("The outputVariable has a different data type than the Value object.");
+            ResizeOutputBuffer(outputVariable, sequences);
+            CopyVariableValueToVector<ElementType>(outputVariable, sequences);
+        }
+
+        ///
+        /// Copy the data stored in the Value object to the buffer 'sequences' as a collection of variable length sequences.
+        /// The output data is in one-hot format.
+        /// The sequence buffer will be resized if ncessary.
+        /// The Value should have the same tensor shape as outputVariable.
+        ///
+        void CopyVariableValueTo(const Variable& outputVariable, std::vector<std::vector<size_t>>& sequences)
+        {
+            auto dataType = GetDataType();
+            if (outputVariable.GetDataType() != dataType)
+                InvalidArgument("The outputVariable has a different data type than the Value object.");
+
+            ResizeOutputBuffer(outputVariable, sequences);
+            if (dataType == DataType::Float)
+            {
+                CopyVariableValueToVector<float>(outputVariable, sequences);
+            }
+            else if (dataType == DataType::Double)
+            {
+                CopyVariableValueToVector<double>(outputVariable, sequences);
+            }
+        }
+
+    private:
+        template <typename ElementType>
+        static void AppendSparseSequenceData(const NDArrayViewPtr& sequenceData, std::vector<SparseIndexType>& colStarts, std::vector<SparseIndexType>& rowIndices, std::vector<char>& nonZeroValues, size_t maxSequenceLength);
+
+        CNTK_API static ValuePtr Create(const NDShape& sampleShape, const std::vector<NDArrayViewPtr>& sequences, const std::vector<bool>& sequenceStartFlags, const DeviceDescriptor& device, bool readOnly, bool createNewCopy);
+
+        ///
+        /// Copy the data stored in 'this' Value object to the buffer 'sequences' as a collection of variable length sequences.
+        /// The output data is in the dense format.
+        /// Assumption: The 'sequences' buffer has been resized to match the number of sequences and the length of each sequence stored in the Value object.
+        /// The resizing is done by ResizeOutputBuffer() and needs to be done on the heap of the caller.
+        ///
+        template <typename ElementType>
+        void CopyVariableValueToVector(const Variable& outputVariable, std::vector<std::vector<ElementType>>& sequences);
+
+        ///
+        /// Copy the data stored in 'this' Value object to the buffer 'sequences' as a collection of variable length sequences.
+        /// The output data is in the one-hot format.
+        /// The resizing is done by ResizeOutputBuffer() and needs to be done on the heap of the caller.
+        /// Assumption: The 'sequences' buffer has been resized to match the number of sequences and the length of each sequence stored in the Value object.
+        ///
+        template <typename ElementType>
+        void CopyVariableValueToVector(const Variable& outputVariable, std::vector<std::vector<size_t>>& sequences);
+
+        template <typename ValueType, typename DestType>
+        void CopyVariableValueToImpl(const Variable& outputVariable, std::vector<std::vector<DestType>>& sequences);
+
+        virtual std::pair<size_t, size_t> GetSequenceAndBatchLength(const Variable& outputVariable);
+
+        ///
+        /// Resize the 'sequences' buffer if needed.
+        /// It should be kept in the header file, as the memory should be allocated at the caller side, not the CNTKLibarary.dll side.
+        /// outputVariable defines tensor, the sequence axis and the batch axis.
+        /// The 'sequences' is the output buffer which is used to store data from 'this' Value. On return, its size and the size of its each element are adjusted
+        /// to match the number of sequences and the length of each sequence stored in the Value object.
+        ///
+        template <typename ElementType>
+        void ResizeOutputBuffer(const Variable& outputVariable, std::vector<std::vector<ElementType>>& sequences)
+        {
+            auto shape = outputVariable.Shape();
+            if (shape == NDShape::Unknown || shape.HasInferredDimension())
+                RuntimeError("It is not supported that the outputVariable has a unknown shape or inferred dimension.");
+
+            size_t numOfSequences;
+            size_t maxSequenceLen;
+            std::tie(maxSequenceLen, numOfSequences) = GetSequenceAndBatchLength(outputVariable);
+
+            // Calculate the number of elements is needed to represent a sample in output buffer.
+            // For dense output, it is the total size of the shape.
+            // For one-hot output, only 1 index is needed to represent the sample.
+            size_t outputSizeOfSample;
+            if (std::is_same<ElementType, size_t>::value)
+            {
+                outputSizeOfSample = 1;
+            }
+            else
+            {
+                outputSizeOfSample = shape.TotalSize();
+            }
+
+            // resize the output buffer size to reflect the number of sequences in output.
+            sequences.resize(numOfSequences);
+
+            const MaskKind* maskData = nullptr;
+            NDMaskPtr cpuMask = nullptr;
+            if (Mask() != nullptr)
+            {
+                cpuMask = (Device().Type() != DeviceKind::CPU) ? Mask()->DeepClone(DeviceDescriptor::CPUDevice()) : Mask();
+                maskData = cpuMask->DataBuffer();
+            }
+
+            // Check whether each sequence has enough space allocated and resize if necessary.
+            size_t sampleCount = 0, seqStart;
+            for (auto seqIndex = 0; seqIndex < numOfSequences; seqIndex++)
+            {
+                if (maskData == nullptr)
+                {
+                    sampleCount = maxSequenceLen;
+                }
+                else
+                {
+                    seqStart = seqIndex * maxSequenceLen;
+                    // The assumption here is that a sequence always start at 0 with SequenceBegin (as no SequenceStart flag is returned) or
+                    // with Invalid (empty sequence), and ends at the first invalid mask.
+                    if (maskData[seqStart] == MaskKind::Invalid)
+                    {
+                        // The sequence is empty.
+                        sampleCount = 0;
+                    }
+                    else
+                    {
+                        if (maskData[seqStart] != MaskKind::SequenceBegin)
+                            RuntimeError("Currently, only sequence starting with SequenceBegin is supported.");
+                        sampleCount = 1;
+                        while (sampleCount < maxSequenceLen)
+                        {
+                            if (maskData[seqStart + sampleCount] == MaskKind::Valid)
+                                sampleCount++;
+                            else
+                                break;
+                        }
+                    }
+                }
+
+                // resize the sequence buffer to reflect the actual length in output.
+                sequences[seqIndex].resize(sampleCount * outputSizeOfSample);
+            }
+        }
+
+        // Disallow copy and move construction and assignment
+        Value(const Value&) = delete; Value& operator=(const Value&) = delete; Value(Value&&) = delete; Value& operator=(Value&&) = delete;
+
+    protected:
+        mutable NDArrayViewPtr m_data;
+        mutable NDMaskPtr m_mask;
+    };
+
     ///
     /// Encapsulates the internal computation state of a Function computed as part of the 'Forward' call on a Function
     /// that must be passed to a subsequent 'Backward' call on the same Function to backpropagate gradient values
