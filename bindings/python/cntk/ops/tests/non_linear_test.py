@@ -344,6 +344,10 @@ def test_op_batch_normalization(device_id, precision):
     dtype = PRECISION_TO_TYPE[precision]
     epsilon = 0.00001
 
+    from cntk import cntk_py
+    cntk_py.set_computation_network_trace_level(1000000)
+    cntk_py.set_gpumemory_allocation_trace_level(1)
+
     t = AA(sample, dtype=dtype).reshape(-1,1,1)
     mean = 1
     var = 2
@@ -354,8 +358,10 @@ def test_op_batch_normalization(device_id, precision):
 
     expected_forward = AA(forward)
 
-    scale = Parameter(shape=(1), init=init_scale, dtype=dtype, device=dev)
+    #scale = Parameter(shape=(1), init=init_scale, dtype=dtype, device=dev)
     bias  = Parameter(shape=(1), init=init_bias, dtype=dtype, device=dev)
+    scale        = Constant(init_scale, shape=(1), dtype=dtype, device=dev)
+    #bias         = Constant(init_bias, shape=(1), dtype=dtype, device=dev)
     run_mean     = Constant(mean, shape=(1), dtype=dtype, device=dev)
     run_variance = Constant(var, shape=(1), dtype=dtype, device=dev)
 
