@@ -2516,6 +2516,13 @@ public:
             m_dScale->Resize(scale); // gradients for scale and bias get stored here
             m_dBias->Resize(bias);
 
+            // cuDnn does not prevent NaN propagation so set the values to zero
+            if (!m_useCntkEngine)
+            {
+                m_dScale->SetValue((ElemType)0);
+                m_dBias->SetValue((ElemType)0);
+            }
+
             double blendFactor = ComputeBlendFactor();  // interpolation weight for the running statistics (the current MB statistics are weighted with 1-this)
 
             // Compute all derivatives in one step. Save derivatives with respect to scale and bias in temp matrices.
@@ -2634,7 +2641,7 @@ public:
 
             if (!m_useCntkEngine)
             {
-                // Fallback to cntk engine on CPU device since cuDnn is not available,
+                // Fallback to cntk engine on CPU device if cuDnn is not available,
                 bool cpuDevice = (m_deviceId == CPUDEVICE);
 
                 // or if parameters cannot be handled by cuDnn (which is needed for compatibility when changing the default to cudnn)
