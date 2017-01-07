@@ -366,8 +366,8 @@ def test_op_batch_normalization(use_cudnn, sample, device_id, precision):
                              use_cudnn_engine=use_cudnn)
 
     forward_input = {input: t}
-    forward = op.eval(forward_input, device=dev)
+    actual_forward = op.eval(forward_input, device=dev)
 
-    for res, exp in zip(forward, expected_forward):
+    for res, exp in zip(actual_forward, expected_forward):
         assert res.shape == AA(exp).shape
         assert np.allclose(res, exp, atol=TOLERANCE_ABSOLUTE)
