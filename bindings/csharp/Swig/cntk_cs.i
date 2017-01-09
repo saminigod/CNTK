@@ -257,6 +257,15 @@
                       const NDShape& lowerPad = {0}, 
                       const NDShape& upperPad = {0}, 
                       const std::wstring& name = L"");
+%ignore CNTK::Unpooling(const Variable& operand,
+						const Variable& poolingInput,
+						PoolingType UnpoolingType,
+						const NDShape& UnpoolingWindowShape,
+						const NDShape& strides = { 1 },
+						const std::vector<bool>& autoPadding = { false },
+						const NDShape& lowerPad = { 0 },
+						const NDShape& upperPad = { 0 },
+						const std::wstring& name = L"");
 %ignore CNTK::BatchNormalization(const Variable& operand, 
                                  const Variable& scale, 
                                  const Variable& bias, 

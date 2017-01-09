@@ -3,14 +3,15 @@
 # For running from Visual Studio add
 # currentDirectory=$(SolutionDir)/<path to corresponding data folder> 
 
-command = trainNetwork:testNetwork
+command = trainNetwork:testNetwork:writeResults
+#command = writeResults
 
 precision = "float"; traceLevel = 1 ; deviceId = "auto"
 
 rootDir = ".." ; dataDir = "$rootDir$/DataSets/MNIST" ;
 outputDir = "./Output" ;
 
-modelPath = "$outputDir$/Models/07_Deconvolution"
+modelPath = "$outputDir$/Models/07_Deconvolution.model"
 #stderr = "$outputDir$/07_Deconvolution_bs_out"
 
 # TRAINING CONFIG
@@ -30,6 +31,8 @@ trainNetwork = {
         # inputs
         imageShape = 28:28:1                        # image dimensions, 1 channel only
         features = Input {imageShape}
+        labelDim = 10
+        labels = Input (labelDim)
 
         featScale = 1/256
         Scale{f} = x => Constant(f) .* x
@@ -41,28 +44,31 @@ trainNetwork = {
         f1 = Scale{featScale} (features)
         z = model (f1)
 
-        # loss and special nodes
+        # rmse loss function
         f2 = Scale{featScale} (features)
         err = z - f2 #featScaled
         sqErr = err .* err
         mse = ReduceMean(sqErr)
         rmse = Sqrt(mse)
         
+        # declare special nodes
         featureNodes = (features)
+        labelNodes = (labels)
         criterionNodes = (rmse)
-   }
+        evaluationNodes = (rmse)
+        outputNodes = (z)
+    }
 
     SGD = {
         epochSize = 60000
         minibatchSize = 64
-        maxEpochs = 10
+        maxEpochs = 2
         
-        learningRatesPerMB = 0.01
-        momentumPerMB = 0.9
-        #learningRatesPerSample = 0.001*5:0.0005
-        #momentumAsTimeConstant = 0
+        learningRatesPerSample = 0.00015
+        momentumAsTimeConstant = 600
         
-        numMBsToShowResult = 500
+        firstMBsToShowResult = 5
+        numMBsToShowResult = 235
     }
 
     reader = {
@@ -84,6 +90,24 @@ testNetwork = {
     reader = {
         readerType = "CNTKTextFormatReader"
         file = "$DataDir$/Test-28x28_cntk_text.txt"
+        input = {
+            features = { dim = 784 ; format = "dense" }
+            labels =   { dim = 10  ; format = "dense" }
+        }
+    }
+}
+
+# WRITE CONFIG
+writeResults = {
+    action = "write"
+    minibatchSize = 1
+    outputPath = "$outputDir$/output.txt"
+    #outputNodeNames = "z"
+    
+    reader = {
+        randomize = False
+        readerType = "CNTKTextFormatReader"
+        file = "$DataDir$/Dummy.txt"
         input = {
             features = { dim = 784 ; format = "dense" }
             labels =   { dim = 10  ; format = "dense" }

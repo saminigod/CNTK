@@ -241,6 +241,7 @@ Examples/Image/DataSets/MNIST/Test-28x28_cntk_text.txt
 Examples/Image/DataSets/MNIST/Train-28x28_cntk_text.txt
 Examples/Image/DataSets/grocery/
 Examples/Image/PretrainedModels/
+Examples/Image/GettingStarted/Output/
 Tutorials/HelloWorld-LogisticRegression/LR.txt.p
 Tutorials/HelloWorld-LogisticRegression/Models/
 Tutorials/.ipynb_checkpoints/

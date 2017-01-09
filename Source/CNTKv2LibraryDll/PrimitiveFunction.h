@@ -86,6 +86,7 @@ namespace CNTK
         {PrimitiveOpType::Cos, L"Cos"},
         {PrimitiveOpType::Pass, L"Pass"},
         { PrimitiveOpType::Block, L"Block" },
+        { PrimitiveOpType::Block, L"Unpooling" },
     };
 
     inline const std::wstring& PrimitiveOpTypeName(PrimitiveOpType opType)
@@ -217,6 +218,7 @@ namespace CNTK
         static const std::wstring AttributeNameNumLayers;
         static const std::wstring AttributeNameHiddenSize;
         static const std::wstring AttributeNameRecurrentOp;
+        static const std::wstring AttributeNameUnpoolingWindowShape;
 
     protected:
         PrimitiveFunction(const std::vector<Variable>& blockInputs, const std::vector<Variable>& blockOutputs, Dictionary&& functionConfig, const std::wstring& functionName, const std::wstring& uid)
@@ -698,6 +700,6 @@ namespace CNTK
 
         // Increasing s_serializationVersion every time we add more ops allows us to print 
         // a more meaningful message when trying to load a new model with a stale binary. 
-        static const size_t s_serializationVersion = 2;
+        static const size_t s_serializationVersion = 3;
     };
 }
