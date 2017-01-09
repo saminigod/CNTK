@@ -68,6 +68,13 @@ protected:
         {
             savedMean.Resize(runMean);
             savedInvStdDev.Resize(runMean);
+
+#ifndef _MSC_VER
+            // CuDnn5 has NaN propagation issue in Linux build, so set these values to zero to prevent that
+            savedMean.SetValue((ElemType)0);
+            savedInvStdDev.Resize((ElemType)0);
+#endif
+
             CUDNN_CALL(cudnnBatchNormalizationForwardTraining(*m_cudnn, mode, &C::One, &C::Zero, m_inOutCuDnnT, ptr(in),
                                                               m_inOutCuDnnT, ptr(out), m_scaleBiasCuDnnT, ptr(scale), ptr(bias), expAvgFactor, ptr(runMean), ptr(runVariance),
                                                               epsilon, ptr(savedMean), ptr(savedInvStdDev)));
