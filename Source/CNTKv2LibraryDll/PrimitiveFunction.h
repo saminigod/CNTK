@@ -86,7 +86,7 @@ namespace CNTK
         {PrimitiveOpType::Cos, L"Cos"},
         {PrimitiveOpType::Pass, L"Pass"},
         { PrimitiveOpType::Block, L"Block" },
-        { PrimitiveOpType::Block, L"Unpooling" },
+        { PrimitiveOpType::Unpooling, L"Unpooling" },
     };
 
     inline const std::wstring& PrimitiveOpTypeName(PrimitiveOpType opType)
