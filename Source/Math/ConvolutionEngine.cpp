@@ -26,9 +26,23 @@ void ConvolutionEngine<ElemType>::Forward(const Mat& in, const Mat& kernel, Mat&
 
     EnsureCompatible();
     EnsureConvolutionInitialized();
-    ForwardCore(in, kernel, out, workspace);
-}
 
+    static int fcount = 0;
+    char szFileName[256];
+    snprintf(szFileName, _countof(szFileName), "ConvMats_%d.txt", fcount++);
+    File fdump(std::string(szFileName), fileOptionsText | fileOptionsWrite);
+
+    fdump << "Mat in\n" << in << "\n";
+    fdump << "Mat kernel\n" << kernel << "\n";
+    fdump << "Mat out\n" << out << "\n";
+
+    ForwardCore(in, kernel, out, workspace);
+
+    fdump << "Mat in\n" << in << "\n";
+    fdump << "Mat kernel\n" << kernel << "\n";
+    fdump << "Mat out\n" << out << "\n";
+    fdump.Flush();
+}
 template <class ElemType>
 void ConvolutionEngine<ElemType>::BackwardData(const Mat& srcGrad, const Mat& kernel, Mat& grad, bool accumulateGradient, Mat& workspace)
 {

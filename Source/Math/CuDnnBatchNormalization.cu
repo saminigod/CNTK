@@ -70,9 +70,9 @@ protected:
             savedInvStdDev.Resize(runMean);
 
             static int fcount = 0;
-            wchar_t szFileName[256];
-            swprintf_s(szFileName, L"BNMats_%d.txt", fcount++);
-            File fdump(szFileName, fileOptionsText | fileOptionsWrite);
+            char szFileName[256];
+            snprintf(szFileName, _countof(szFileName), "BNMats_%d.txt", fcount++);
+            File fdump(std::string(szFileName), fileOptionsText | fileOptionsWrite);
             fdump << "Mat in\n" << in << "\n";
             fdump << "Mat scale\n" << scale << "\n";
             fdump << "Mat bias\n" << bias << "\n";
