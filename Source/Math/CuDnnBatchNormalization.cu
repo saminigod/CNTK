@@ -69,15 +69,32 @@ protected:
             savedMean.Resize(runMean);
             savedInvStdDev.Resize(runMean);
 
-#ifndef _MSC_VER
-            // CuDnn5 has NaN propagation issue in Linux build, so set these values to zero to prevent that
-            savedMean.SetValue((ElemType)0);
-            savedInvStdDev.Resize((ElemType)0);
-#endif
+            static int fcount = 0;
+            wchar_t szFileName[256];
+            swprintf_s(szFileName, L"BNMats_%d.txt", fcount++);
+            File fdump(szFileName, fileOptionsText | fileOptionsWrite);
+            fdump << "Mat in\n" << in << "\n";
+            fdump << "Mat scale\n" << scale << "\n";
+            fdump << "Mat bias\n" << bias << "\n";
+            fdump << "Mat runMean\n" << runMean << "\n";
+            fdump << "Mat runVariance\n" << runVariance << "\n";
+            fdump << "Mat out\n" << out << "\n";
+            fdump << "Mat savedMean\n" << savedMean << "\n";
+            fdump << "Mat savedInvStdDev\n" << savedInvStdDev << "\n";
 
             CUDNN_CALL(cudnnBatchNormalizationForwardTraining(*m_cudnn, mode, &C::One, &C::Zero, m_inOutCuDnnT, ptr(in),
                                                               m_inOutCuDnnT, ptr(out), m_scaleBiasCuDnnT, ptr(scale), ptr(bias), expAvgFactor, ptr(runMean), ptr(runVariance),
                                                               epsilon, ptr(savedMean), ptr(savedInvStdDev)));
+
+            fdump << "Mat in\n" << in << "\n";
+            fdump << "Mat scale\n" << scale << "\n";
+            fdump << "Mat bias\n" << bias << "\n";
+            fdump << "Mat runMean\n" << runMean << "\n";
+            fdump << "Mat runVariance\n" << runVariance << "\n";
+            fdump << "Mat out\n" << out << "\n";
+            fdump << "Mat savedMean\n" << savedMean << "\n";
+            fdump << "Mat savedInvStdDev\n" << savedInvStdDev << "\n";
+            fdump.Flush();
         }
     }
 
