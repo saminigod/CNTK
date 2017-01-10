@@ -7,11 +7,12 @@
 Unit tests for kernel operations, tested for the forward and the backward pass
 """
 
+from __future__ import division
 import numpy as np
 import pytest
-from .ops_test_utils import unittest_helper, _test_unary_op, AA, I, precision, PRECISION_TO_TYPE, constant
+from .ops_test_utils import unittest_helper, _test_unary_op, AA, I, precision, PRECISION_TO_TYPE, constant, cntk_device
 from cntk.ops import AVG_POOLING, MAX_POOLING
-from ...utils import sanitize_dtype_cntk, cntk_device
+from ...utils import sanitize_dtype_cntk
 
 CONVOLUTION_OPERANDS = [
     ([[[5., 6.],  # (1, 2, 2) map
@@ -68,8 +69,89 @@ def test_op_convolution_without_padding(convolution_map, convolution_input, devi
     unittest_helper(input_op, forward_input, expected_forward,
                     expected_backward, device_id=device_id, precision=precision)
 
+
+ASYM_CONVOLUTION_DATA = [
+    ([1, 1, 1, 3, 3], # input_size
+     [1, 2, 2], # convolution size
+     [[[[ 19, 25, 10],
+        [ 37, 43, 16], 
+        [ 7, 8, 0]]]]) # result
+]
+# this test handles convolution with asymmetric padding, in particular, with auto_padding is set to True
+# and the kernel shape is even 
+@pytest.mark.skip(reason="Reference model takes too long to run causing timeout, needs further investigation")
+@pytest.mark.parametrize("input_size, conv_size, result", ASYM_CONVOLUTION_DATA)
+def test_asym_convolution(input_size, conv_size, result, device_id, precision): 
+    dt = PRECISION_TO_TYPE[precision]
+    dev = cntk_device(device_id)
+
+    # fill input operand with a sequence 1,2,3,... til total size and then
+    # resize to input_size
+    total_size = np.prod(input_size)
+    x = np.arange(total_size, dtype=dt)
+    input_operand = x.reshape(input_size)
+
+    a = I(shape=input_operand.shape[2:],
+        dtype=sanitize_dtype_cntk(precision),
+        needs_gradient=False,
+        name='a')
+
+    # do the same for convolution kernel 
+    total_size = np.prod(conv_size)
+    y = np.arange(total_size, dtype=dt) 
+    conv_map = constant(value=y.reshape(conv_size), device=dev)
+
+    from cntk import convolution
+    input_op = convolution(conv_map, a, auto_padding=[True])
+
+    forward_input = {a: input_operand}
+    expected_forward = AA([result])
+
+    unittest_helper(input_op, forward_input, expected_forward,
+                    None, device_id=device_id, precision=precision)
+
+
+POOLING_GEOMETRY_DATA = [
+    ([1, 1, 1, 6, 6], # input_size
+     (1, 5, 5), # pooling_window
+     (1, 3, 3), # strides
+     [True], # padding flag 
+     [[[[ 21,   23],
+       [ 33,   35]]]]), # result
+    ([1, 1, 1, 8, 8],
+     (1, 4, 4),
+     (1, 5, 5),
+     [False],
+     [[[[ 27 ]]]])
+]
+# the pooling geometry test also tests convolution geometry since they go through the same path 
+# in the CPU code 
+@pytest.mark.parametrize("input_size, pooling_window, strides, padding, result", POOLING_GEOMETRY_DATA)
+def test_op_pooling_geometry(input_size, pooling_window, strides, padding, result, device_id, precision): 
+    dt = PRECISION_TO_TYPE[precision]
+
+    # fill input operand with a sequence 1,2,3,... til total size and then
+    # resize to input_size
+    total_size = np.prod(input_size)
+    x = np.arange(total_size, dtype=dt)
+    input_operand = x.reshape(input_size)
+
+    a = I(shape=input_operand.shape[2:],
+        dtype=sanitize_dtype_cntk(precision),
+        needs_gradient=False,
+        name='a')
+
+    from cntk import pooling
+    input_op = pooling(a, MAX_POOLING, pooling_window, strides, auto_padding=padding)
+
+    forward_input = {a: input_operand}
+    expected_forward = AA([result])
+
+    unittest_helper(input_op, forward_input, expected_forward,
+                    None, device_id=device_id, precision=precision)
+
 AVG_POOLING_DATA = [
-    ([1, 2, 2, 4 ,3], # input_size
+    ([1, 2, 2, 4, 3], # input_size
      (2, 2, 1), # pooling_window
      (2, 2, 1), # strides
      [[[[  8.5,   9.5,  10.5],
@@ -110,7 +192,7 @@ def test_op_avg_pooling(input_size, pooling_window, strides, result, device_id, 
                 expected_backward, device_id=device_id, precision=precision)
 
 MAX_POOLING_DATA = [
-    ([1, 2, 2, 4 ,3], # input_size
+    ([1, 2, 2, 4, 3], # input_size
      (2, 2, 1), # pooling_window
      (2, 2, 1), # strides
      [[[[ 16.,  17.,  18.],

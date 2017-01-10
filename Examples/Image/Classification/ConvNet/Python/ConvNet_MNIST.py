@@ -4,6 +4,7 @@
 # for full license information.
 # ==============================================================================
 
+from __future__ import print_function
 import numpy as np
 import sys
 import os
@@ -117,7 +118,7 @@ def convnet_mnist(debug_output=False):
         metric_denom += current_minibatch
 
         # Keep track of the number of samples processed so far.
-        sample_count += trainer.previous_minibatch_sample_count
+        sample_count += data[label_var].num_samples
         minibatch_index += 1
 
     print("")

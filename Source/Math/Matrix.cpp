@@ -717,8 +717,8 @@ ElemType* Matrix<ElemType>::CopyToArray() const
                             nullptr,
                             return m_CPUMatrix->CopyToArray(),
                             return m_GPUMatrix->CopyToArray(),
-                            NOT_IMPLEMENTED,
-                            NOT_IMPLEMENTED);
+                            { CPUMatrix<ElemType> tmpDense(m_CPUSparseMatrix->GetNumRows(), m_CPUSparseMatrix->GetNumCols()); tmpDense.SetValue((ElemType)0); CPUSparseMatrix<ElemType>::ScaleAndAdd((ElemType)1, *m_CPUSparseMatrix, tmpDense); return tmpDense.CopyToArray(); },
+                            return m_GPUSparseMatrix->CopyToDenseMatrix().CopyToArray());
 }
 
 //memory will be allocated by the callee if not enough but need to be deleted by the caller after it's done
@@ -1852,6 +1852,16 @@ Matrix<ElemType> Matrix<ElemType>::operator+(const Matrix<ElemType>& a) const
 template <class ElemType>
 Matrix<ElemType>& Matrix<ElemType>::AssignSumOf(const Matrix<ElemType>& a, const Matrix<ElemType>& b)
 {
+    if (this == &a)
+    {
+        *this += b;
+        return *this;
+    }
+    if (this == &b)
+    {
+        *this += a;
+        return *this;
+    }
     if (a.GetNumElements() == 1)
     {
         SetValue(b);

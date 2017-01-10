@@ -15,6 +15,8 @@
 #include "RecurrentNodes.h"
 #include "Serialization.h"
 #include "RNNNodes.h"
+#include "BlockFunction.h"
+#include "CompositeFunction.h"
 
 using namespace Microsoft::MSR::CNTK;
 
@@ -37,6 +39,8 @@ namespace CNTK
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameNumSamples = L"numSamples";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameDropoutRate = L"dropoutRate";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameNewShape = L"newShape";
+    /*static*/ const std::wstring PrimitiveFunction::AttributeNameBeginAxis = L"beginAxis";
+    /*static*/ const std::wstring PrimitiveFunction::AttributeNameEndAxis = L"endAxis";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameOutputRank = L"outputRank";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameInferInputRankToMap = L"inferInputRankToMap";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameOffset = L"offset";
@@ -70,7 +74,6 @@ namespace CNTK
 
     /*static*/ std::vector<Variable> PrimitiveFunction::GetOutputVariables(PrimitiveOpType op,
                                                                            std::vector<Variable>& inputs,
-                                                                           Function* owner,
                                                                            Dictionary& functionConfig,
                                                                            bool inferDimensions,
                                                                            const std::wstring& functionName)
@@ -110,6 +113,16 @@ namespace CNTK
         if (outputDataType == DataType::Unknown)
             outputDataType = firstKnownInputDataType;
 
+        // Propagate the data type to any input Parameters/Constants with unknown data type
+        if (inferDimensions && (outputDataType != DataType::Unknown))
+        {
+            for (auto& input : inputs)
+            {
+                if ((input.GetDataType() == DataType::Unknown) && (input.IsConstant() || input.IsParameter()))
+                    input.m_dataFields->m_dataType = outputDataType;
+            }
+        }
+
         // We currently require that the inputs' dynamic axes, if any, match
         std::vector<Axis> outputDynamicAxes;
         if ((op == PrimitiveOpType::SumAll) ||
@@ -142,7 +155,17 @@ namespace CNTK
                     }
                     else
                     {
-                        outputDynamicAxes.push_back(Axis::NewUniqueDynamicAxis(L"whereNodeDynamicAxis"));
+                        std::function<Variable(const Variable&)> GetActualSourceVariable;
+                        GetActualSourceVariable = [&GetActualSourceVariable](const Variable& var) -> Variable {
+                            if (var.BlockFunctionVariableMapping() == Variable())
+                                return var;
+                            else
+                                return GetActualSourceVariable(var.BlockFunctionVariableMapping());
+                        };
+
+                        auto whereNodeConditionSourceVar = GetActualSourceVariable(inputs[0]);
+                        auto whereNodeSequenceAxis = Axis(std::wstring(L"whereNodeDynamicAxis_conditionVar_") + whereNodeConditionSourceVar.Uid());
+                        outputDynamicAxes.push_back(whereNodeSequenceAxis);
                     }
 
                     for (size_t i2 = 1; i2 < inputs[0].DynamicAxes().size(); ++i2)
@@ -222,10 +245,10 @@ namespace CNTK
                 if (!axis1.IsStaticAxis() || !axis2.IsStaticAxis())
                     LogicError("TransposeAxes operation currently does not support transposing dynamic axes");
 
-                VerifyStaticAxis(axis1, inputs[0].Shape());
-                VerifyStaticAxis(axis2, inputs[0].Shape());
-
-                outputShape = inputs[0].Shape();
+                // We allow to transpose with an axes that exceeds the rank of the input.
+                // The output rank is the max of the input rank, and either of the axes being transposed.
+                auto outputRank = std::max(inputs[0].Shape().Rank(), (size_t)(std::max(axis1.StaticAxisIndex(), axis2.StaticAxisIndex()) + 1));
+                outputShape = inputs[0].Shape().AppendShape(NDShape(outputRank - inputs[0].Shape().Rank(), 1));
                 std::swap(outputShape[axis1.StaticAxisIndex()], outputShape[axis2.StaticAxisIndex()]);
                 break;
             }
@@ -263,11 +286,17 @@ namespace CNTK
             }
             case PrimitiveOpType::Reshape:
             {
-                auto& newShape = functionConfig[PrimitiveFunction::AttributeNameNewShape].Value<NDShape>();
-                outputShape = ReshapeOutputShape(inputs[0].Shape(), newShape);
-                if (inferDimensions)
-                    newShape = outputShape;
+                auto& replacementShape = functionConfig[PrimitiveFunction::AttributeNameNewShape].Value<NDShape>();
 
+                auto beginAxis = Axis(0);
+                auto endAxis = Axis((int)inputs[0].Shape().Rank());
+                if (functionConfig.Contains(PrimitiveFunction::AttributeNameBeginAxis))
+                    beginAxis = NormalizeStaticAxis(functionConfig[PrimitiveFunction::AttributeNameBeginAxis].Value<Axis>(), inputs[0].Shape());
+
+                if (functionConfig.Contains(PrimitiveFunction::AttributeNameEndAxis))
+                    endAxis = NormalizeStaticAxis(functionConfig[PrimitiveFunction::AttributeNameEndAxis].Value<Axis>(), inputs[0].Shape());
+
+                outputShape = ReshapeOutputShape(inputs[0].Shape(), replacementShape, beginAxis, endAxis, inferDimensions);
                 break;
             }
             case PrimitiveOpType::ROIPooling:
@@ -372,23 +401,23 @@ namespace CNTK
             {
                 assert(inputs.size() == 2);
 
-                    auto transposeShapeFunc = [](const NDShape& shape) {
-                        NDShape transposedShape(std::max<size_t>(2, shape.Rank()), 1);
-                        for (size_t i = 0; i < shape.Rank(); ++i)
-                            transposedShape[transposedShape.Rank() - i - 1] = shape[i];
+                auto transposeShapeFunc = [](const NDShape& shape) {
+                    NDShape transposedShape(std::max<size_t>(2, shape.Rank()), 1);
+                    for (size_t i = 0; i < shape.Rank(); ++i)
+                        transposedShape[transposedShape.Rank() - i - 1] = shape[i];
 
-                        return transposedShape;
-                    };
+                    return transposedShape;
+                };
 
-                    if (inputs[0].Shape().Rank() > 2)
-                    LogicError("TransposeTimes operation currently only supports %s operands of rank 1 or 2", Internal::IsReversingTensorShapesInErrorMessagesEnabled() ? "right" : "left");
+                if (inputs[0].Shape().Rank() > 2)
+                LogicError("TransposeTimes operation currently only supports %s operands of rank 1 or 2", Internal::IsReversingTensorShapesInErrorMessagesEnabled() ? "right" : "left");
 
-                    NDShape transposedLeftOperandShape = transposeShapeFunc(inputs[0].Shape());
-                    Variable dummyLeftOperand = PlaceholderVariable(transposedLeftOperandShape);
-                    size_t outputRank = functionConfig[PrimitiveFunction::AttributeNameOutputRank].Value<size_t>();
-                    outputShape = TimesOpOutputShape(dummyLeftOperand, inputs[1], outputRank, -1, inferDimensions);
-                    if (dummyLeftOperand.Shape() != transposedLeftOperandShape)
-                        inputs[0].m_dataFields->m_shape = transposeShapeFunc(dummyLeftOperand.Shape());
+                NDShape transposedLeftOperandShape = transposeShapeFunc(inputs[0].Shape());
+                Variable dummyLeftOperand = PlaceholderVariable(transposedLeftOperandShape);
+                size_t outputRank = functionConfig[PrimitiveFunction::AttributeNameOutputRank].Value<size_t>();
+                outputShape = TimesOpOutputShape(dummyLeftOperand, inputs[1], outputRank, -1, inferDimensions);
+                if (dummyLeftOperand.Shape() != transposedLeftOperandShape)
+                    inputs[0].m_dataFields->m_shape = transposeShapeFunc(dummyLeftOperand.Shape());
 
                 break;
             }
@@ -447,12 +476,12 @@ namespace CNTK
             case PrimitiveOpType::ReduceElements:
             {
                 assert(inputs.size() == 1);
-                    auto reductionAxis = NormalizeStaticAxis(functionConfig[PrimitiveFunction::AttributeNameAxis].Value<Axis>(), inputs[0].Shape());
+                auto reductionAxis = NormalizeStaticAxis(functionConfig[PrimitiveFunction::AttributeNameAxis].Value<Axis>(), inputs[0].Shape());
                 if (reductionAxis == Axis::AllStaticAxes())
                     outputShape = {};
                 else
                 {
-                        std::vector<int> reductionAxes = { reductionAxis.StaticAxisIndex() };
+                    std::vector<int> reductionAxes = { reductionAxis.StaticAxisIndex() };
                     outputShape = ReductionOpOutputShape(op, inputs[0].Shape(), reductionAxes, /*preserveReductionAxes =*/ true);
                 }
                 break;
@@ -503,14 +532,14 @@ namespace CNTK
             case PrimitiveOpType::Splice:
             {
                 assert(inputs.size() >= 2);
-                    auto maxInputRank = MaxInputRank(inputs);
-                    auto spliceAxis = NormalizeStaticAxis(functionConfig[PrimitiveFunction::AttributeNameAxis].Value<Axis>(), NDShape(maxInputRank));
+                auto maxInputRank = MaxInputRank(inputs);
+                auto spliceAxis = NormalizeStaticAxis(functionConfig[PrimitiveFunction::AttributeNameAxis].Value<Axis>(), NDShape(maxInputRank));
 
-                    if (!spliceAxis.IsStaticAxis())
-                        LogicError("Splice operation currently does not support splicing along dynamic axis");
+                if (!spliceAxis.IsStaticAxis())
+                    LogicError("Splice operation currently does not support splicing along dynamic axis");
 
-                    if (spliceAxis.StaticAxisIndex() < 0)
-                        InvalidArgument("Splice: The axis argument's static axis index must be >= 0!");
+                if (spliceAxis.StaticAxisIndex() < 0)
+                    InvalidArgument("Splice: The axis argument's static axis index must be >= 0!");
 
                 outputShape = SpliceOutputShape(inputs, spliceAxis.StaticAxisIndex());
                 break;
@@ -589,7 +618,12 @@ namespace CNTK
             }
         }
 
-        return{ OutputVariable(outputShape, outputDataType, owner, outputDynamicAxes, functionName.empty() ? L"" : functionName + L"_output") };
+        return{ OutputVariable(outputShape, outputDataType, outputDynamicAxes, functionName.empty() ? L"" : functionName) };
+    }
+
+    /*virtual*/ std::vector<Variable> PrimitiveFunction::GetOutputVariables(bool inferDimensions)
+    {
+        return GetOutputVariables(m_op, m_inputs, m_attributes, inferDimensions, Name());
     }
 
     static const std::wstring s_primitiveFunctionTypeValue = L"PrimitiveFunction";
@@ -615,15 +649,35 @@ namespace CNTK
 
         dict[inputsKey] = std::move(inputUids);
 
+        if (m_op == PrimitiveOpType::Block)
+        {
+            auto blockCompositeFunc = dynamic_cast<const CompositeFunction*>(BlockComposite().get());
+            dict[blockFunctionCompositeKey] = blockCompositeFunc->SerializeBlockComposite();
+            dict[blockFunctionOpNameKey] = OpName();
+
+            const auto& blockArgumentsMap = BlockArgumentsMapping();
+            std::vector<std::wstring> serializedArgumentsMapKeys;
+            std::vector<std::wstring> serializedArgumentsMapValues;
+            for (auto argumentMapping : blockArgumentsMap)
+            {
+                serializedArgumentsMapKeys.push_back(argumentMapping.first.Uid());
+                serializedArgumentsMapValues.push_back(argumentMapping.second.Uid());
+            }
+
+            dict[blockFunctionCompositeArgumentsMapKeysKey] = AsDictionaryValueVector(serializedArgumentsMapKeys);
+            dict[blockFunctionCompositeArgumentsMapValuesKey] = AsDictionaryValueVector(serializedArgumentsMapValues);
+        }
+
         return dict;
     }
 
     /*static*/ FunctionPtr PrimitiveFunction::Deserialize(const Dictionary& dict, 
                                                           const std::unordered_map<std::wstring, Variable>& uidToVariableMap,
+                                                          const std::unordered_set<FunctionPtr>& allPrimitiveFunctions,
+                                                          const std::unordered_map<Variable, Variable>& placeholderReplacements,
                                                           const CNTK::DeviceDescriptor& device)
     {
         static const vector<std::wstring> s_requiredDictionaryKeys = { typeKey, opKey, uidKey, attributesKey, inputsKey, nameKey };
-       
         size_t version = ValidateDictionary<PrimitiveFunction>(dict, s_requiredDictionaryKeys, s_primitiveFunctionTypeValue, s_serializationVersion);
 
         PrimitiveOpType op = PrimitiveOpType(dict[opKey].Value<std::size_t>());
@@ -631,9 +685,9 @@ namespace CNTK
         // The hard requirement that the serialization depends on is that
         // new op type values are only added to the end of the list, after Combine.
         // This also applies to other enums (DataType, VariableKind, etc.)
-        if (op > PrimitiveOpType::Combine)
+        if (op > PrimitiveOpType::Block)
         {
-            LogicError("Unexpected variable '%ls':'%u' (%s).", 
+            LogicError("Unexpected op '%ls':'%u' (%s).", 
                         opKey.c_str(), 
                         static_cast<std::underlying_type<CNTK::PrimitiveOpType>::type>(op),
                         GetVersionsString<PrimitiveFunction>(s_serializationVersion, version).c_str());
@@ -652,13 +706,42 @@ namespace CNTK
             const auto& inputUid = dictionaryValue.Value<std::wstring>();
             if (uidToVariableMap.find(inputUid) == uidToVariableMap.end())
             {
-                LogicError("There are no inputs corresponging to input uid = '%ls' "
+                LogicError("There are no inputs corresponding to input uid = '%ls' "
                         "(%s).", inputUid.c_str(), GetVersionsString<PrimitiveFunction>(s_serializationVersion, version).c_str());
             }
             inputs.push_back(uidToVariableMap.at(inputUid));
         }
 
-        return std::shared_ptr<PrimitiveFunction>(new PrimitiveFunction(op, inputs, std::move(attributes), name, uid), 
-                                                  [](PrimitiveFunction* ptr) { delete ptr; });
+        if (op == PrimitiveOpType::Block)
+        {
+            static const vector<std::wstring> s_requiredBlockFunctionDictionaryKeys = { blockFunctionCompositeKey, blockFunctionOpNameKey, blockFunctionCompositeArgumentsMapKeysKey, blockFunctionCompositeArgumentsMapValuesKey };
+            ValidateDictionary<PrimitiveFunction>(dict, s_requiredBlockFunctionDictionaryKeys, s_primitiveFunctionTypeValue, s_serializationVersion);
+
+            auto composite = CompositeFunction::DeserializeBlockComposite(dict[blockFunctionCompositeKey].Value<Dictionary>(), allPrimitiveFunctions, placeholderReplacements, device);
+
+            auto compositeArguments = composite->Arguments();
+            auto findCompositeArgumentByUid = [&compositeArguments](const std::wstring& uid) {
+                return *std::find_if(compositeArguments.begin(), compositeArguments.end(), [&uid](const Variable& argument) {
+                    return (argument.Uid() == uid);
+                });
+            };
+
+            const auto& blockOpName = dict[blockFunctionOpNameKey].Value<std::wstring>();
+
+            auto blockArgumentsMapKeys = AsVector<std::wstring>(dict[blockFunctionCompositeArgumentsMapKeysKey].Value<std::vector<DictionaryValue>>());
+            auto blockArgumentsMapValues = AsVector<std::wstring>(dict[blockFunctionCompositeArgumentsMapValuesKey].Value<std::vector<DictionaryValue>>());
+            if (blockArgumentsMapKeys.size() != blockArgumentsMapValues.size())
+                RuntimeError("Invalid block function dictionary found during deserialization; Number of block argument map keys does not match the number of map values");
+
+            std::vector<std::pair<Variable, Variable>> argumentsMap;
+            for (size_t i = 0; i < blockArgumentsMapKeys.size(); ++i)
+                argumentsMap.push_back({ findCompositeArgumentByUid(blockArgumentsMapKeys[i]), uidToVariableMap.at(blockArgumentsMapValues[i]) });
+
+            return std::shared_ptr<BlockFunction>(new BlockFunction(std::move(composite), argumentsMap, blockOpName, std::move(attributes), name, uid),
+                                                  [](BlockFunction* ptr) { delete ptr; });
+        }
+        else
+            return std::shared_ptr<PrimitiveFunction>(new PrimitiveFunction(op, inputs, std::move(attributes), name, uid), 
+                                                      [](PrimitiveFunction* ptr) { delete ptr; });
     }
 }

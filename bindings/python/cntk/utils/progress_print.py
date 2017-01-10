@@ -3,27 +3,33 @@
 # Licensed under the MIT license. See LICENSE.md file in the project root
 # for full license information.
 # ==============================================================================
+from __future__ import print_function
 import time
 import sys
 
 # TODO: Let's switch to import logging in the future instead of print. [ebarsoum]
-class ProgressPrinter:
+class ProgressPrinter(object):
     '''
     Accumulates training time statistics (loss and metric)
     and pretty prints them as training progresses.
 
     It provides the number of samples, average loss and average metric
     since the last print or since the start of accumulation.
+
+    Args:
+        freq (int or None, default None):  determines how often
+         printing will occur. The value of 0 means an geometric
+         schedule (1,2,4,...). A value > 0 means a arithmetic schedule
+         (a log print for minibatch number: ``freq``, a log print for minibatch number: 2*``freq``, a log print for minibatch number: 3*``freq``,...), and a value of None means no per-minibatch log.
+        first (int, default 0): Only start logging after the minibatch number is greater or equal to ``first``.
+        tag (string, default EmptyString): prepend minibatch log lines with your own string
+        log_to_file (string or None, default None): if None, output log data to stdout.  If a string is passed, the string is path to a file for log data.
+        distributed_learner (:class:`~cntk.distributed.DistributedLearner` or None, default None): Your learner if you are using distributed parallelism -- each rank's log will go to seperate file.
+        gen_heartbeat (bool, default False): If True output a progress message every 10 seconds or so to stdout.
+        num_epochs (int, default 300): The total number of epochs to be trained.  Used for some metadata.  This parameter is optional.
     '''
-    def __init__(self, freq=None, first=0, tag='', log_to_file=None, distributed_learner=None, gen_heartbeat=False):
-        '''
-        Constructor. The optional ``freq`` parameter determines how often
-        printing will occur. The value of 0 means an geometric
-        schedule (1,2,4,...). A value > 0 means a arithmetic schedule
-        (freq, 2*freq, 3*freq,...), and a value of None means no per-minibatch log.
-        set log_to_file if you want the output to go file instead of stdout.
-        set distributed_learner to your learner if you are using distibuted parallelism -- each rank's log will go to seperate file.
-        '''
+    
+    def __init__(self, freq=None, first=0, tag='', log_to_file=None, distributed_learner=None, gen_heartbeat=False, num_epochs=300):
         from sys import maxsize
         if freq is None:
             freq = maxsize
@@ -44,6 +50,7 @@ class ProgressPrinter:
         self.log_to_file = log_to_file
         self.distributed_learner = distributed_learner
         self.gen_heartbeat = gen_heartbeat
+        self.num_epochs =  num_epochs
 
         self.logfilename = None
         if self.log_to_file != None:
@@ -58,10 +65,19 @@ class ProgressPrinter:
             with open(self.logfilename, "w") as logfile:
                 logfile.write(self.logfilename + "\n")
 
+            self.___logprint('CNTKCommandTrainInfo: train : ' + str(num_epochs))
+            self.___logprint('CNTKCommandTrainInfo: CNTKNoMoreCommands_Total : ' + str(num_epochs))
+            self.___logprint('CNTKCommandTrainBegin: train')
+
         if freq==0:
             self.___logprint(' average      since    average      since      examples')
             self.___logprint('    loss       last     metric       last              ')
             self.___logprint(' ------------------------------------------------------')
+
+    def end_progress_print(self, msg=""):
+        self.___logprint('CNTKCommandTrainEnd: train')
+        if msg !="" and self.log_to_file != None:
+            self.___logprint(msg)
 
     def avg_loss_since_start(self):
         '''
@@ -213,6 +229,8 @@ class ProgressPrinter:
             trainer (:class:`cntk.trainer.Trainer`): trainer from which information is gathered
             with_metric (`bool`): whether to update the metric accumulators
         '''
+        if trainer.previous_minibatch_sample_count == 0:
+            return
         self.update(
             trainer.previous_minibatch_loss_average,
             trainer.previous_minibatch_sample_count, 

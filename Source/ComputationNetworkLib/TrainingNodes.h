@@ -11,7 +11,6 @@
 #include "InputAndParamNodes.h"
 #include "CPURNGHandle.h"
 
-
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <map>
@@ -1151,7 +1150,7 @@ class IRngUser
 {
 public:
     virtual RNGHandle& GetRNGHandle(DEVICEID_TYPE deviceId) = 0;
-    virtual void SetRngState(unsigned long seed, unsigned long long offset = 0) = 0;
+    virtual void SetRngState(uint64_t seed, uint64_t offset = 0) = 0;
 };
 
 // This implements IRngUser using RNGHandle.
@@ -1167,31 +1166,61 @@ public:
     }
 
     // E.g. called from ComputationNetwork to make sure that CNTK running on different nodes will have different seed.
-    void SetRngState(unsigned long seed, unsigned long long offset = 0) override
+    void SetRngState(uint64_t seed, uint64_t offset = 0) override
     {
         m_rngSeed = seed;
         m_rngOffset = offset;
         m_RNGHandle.reset(); // Reset handle. New handle will be generated with next call of GetRNGHandle(...).
     }
 
-    unsigned long GetRngSeed() const
+    uint64_t GetRngSeed() const
     {
         return m_rngSeed;
     }
 
-    unsigned long long GetRngOffset() const
+    uint64_t GetRngOffset() const
     {
         return m_rngOffset;
     }
 
-    void UpdateRngOffset(unsigned long long val)
+    void UpdateRngOffset(uint64_t val)
     {
         m_rngOffset = val;
     }
 
 protected:
-    unsigned long m_rngSeed = 0;
-    unsigned long long m_rngOffset = 0;
+
+    void Load(File& fstream, size_t modelVersion)
+    {
+        if (modelVersion < CNTK_MODEL_VERSION_16)
+            return;
+
+        uint64_t seed;
+        uint64_t offset;
+
+        if (modelVersion == CNTK_MODEL_VERSION_16)
+        {
+            unsigned long seed_16;
+            fstream >> seed_16;
+            seed = seed_16;
+        }
+        else 
+        {
+            fstream >> seed;
+        }
+
+        fstream >> offset;
+        SetRngState(seed, offset);  
+    }
+
+    void Save(File& fstream) const
+    {
+        fstream << GetRngSeed();
+        fstream << GetRngOffset();
+    }
+
+    uint64_t m_rngSeed = 0;
+    uint64_t m_rngOffset = 0;
     std::shared_ptr<RNGHandle> m_RNGHandle;
 };
 
@@ -1216,7 +1245,7 @@ public:
     RandomSampleNodeBase(DEVICEID_TYPE deviceId, const wstring& name, size_t sizeOfSampledSet = 0, bool allowDuplicates = false)
         : Base(deviceId, name), m_sizeOfSampledSet(sizeOfSampledSet), m_allowDuplicates(allowDuplicates)
     {
-        SetRngState((unsigned long)CreateUniqId());
+        SetRngState(CreateUniqId());
     }
 
     RandomSampleNodeBase(const ScriptableObjects::IConfigRecordPtr configp)
@@ -2092,7 +2121,7 @@ public:
         : Base(deviceId, name),
         m_dropoutRate(0)
     {
-        SetRngState((unsigned long)CreateUniqId());
+        SetRngState(CreateUniqId());
     }
 
     virtual void Save(File& fstream) const override;
@@ -2557,6 +2586,11 @@ public:
 
         if (isFinalValidationPass)
         {
+            // The current implementation requires that the gradient of the first operand/input be computed
+            // in order to compute gradients for the bias and scale parameters (2nd and 3rd inputs)
+            if ((Input(1)->NeedsGradient() || Input(2)->NeedsGradient()) && !Input(0)->NeedsGradient())
+                InvalidArgument("%ls %ls currently supports learnable scale and bias parameters only if the first input also needs gradient (i.e. is dependent on at-least one learnable parameter).", NodeName().c_str(), OperationName().c_str());
+
             if (m_convertRunningVariancePending)
             {
                 // Prior to CNTK CuDNN v5 support (and the CNTK engine of the same time), mean and inverse standard deviation

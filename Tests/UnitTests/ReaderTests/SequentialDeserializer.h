@@ -86,7 +86,7 @@ namespace Microsoft { namespace MSR { namespace CNTK { namespace Test {
             : m_sampleLayout(make_shared<TensorShape>(1))
         {
             std::mt19937_64 engine(seed);
-            std::uniform_int_distribution<int> length(1, maxSequenceLength);
+            boost::random::uniform_int_distribution<int> length(1, maxSequenceLength);
 
             // Let's generate our data.
             float currentValue = 0;
@@ -211,7 +211,7 @@ namespace Microsoft { namespace MSR { namespace CNTK { namespace Test {
         std::vector<float> result;
         while (result.size() < numSamples)
         {
-            auto sequences = sequenceEnumerator->GetNextSequences(mbSize);
+            auto sequences = sequenceEnumerator->GetNextSequences(mbSize, mbSize);
             assert(!sequences.m_endOfEpoch);
             assert(sequences.m_data.size() == 1 || sequences.m_data.size() == 0);
             if (sequences.m_data.empty())
@@ -245,7 +245,7 @@ namespace Microsoft { namespace MSR { namespace CNTK { namespace Test {
         std::vector<float> epoch;
         while (!shouldBreak)
         {
-            auto sequences = sequenceEnumerator->GetNextSequences(mbSize);
+            auto sequences = sequenceEnumerator->GetNextSequences(mbSize, mbSize);
             shouldBreak = sequences.m_endOfEpoch;
             assert(sequences.m_data.size() == 1 || sequences.m_data.size() == 0);
             if (sequences.m_data.size() == 0)

@@ -470,7 +470,9 @@ namespace CNTK
             assert(axis.IsStaticAxis());
             assert(operandShape != NDShape::Unknown);
 
-            if (axis.StaticAxisIndex() < 0)
+            if (axis == Axis::EndStaticAxis())
+                axis = Axis((int)operandShape.Rank());
+            else if (axis.StaticAxisIndex() < 0)
                 axis = Axis((int)operandShape.Rank() + axis.StaticAxisIndex());
         }
 
@@ -491,6 +493,8 @@ namespace CNTK
 
     std::string ToString(const std::wstring& wstring);
     std::wstring ToWString(const std::string& string);
+    std::pair<size_t, size_t> GetNumTimeStepsAndSequences(const NDShape& maskShape, size_t numDynamicAxes);
+
     // Helper class to manage a collection of learners.
     class Learners
     {
@@ -545,4 +549,19 @@ namespace CNTK
         template <typename ElementType>
         static ValuePtr GetValueObjectFromCNTKImplMatrixAndMBLayout(const Variable& var, const Microsoft::MSR::CNTK::Matrix<ElementType>& matrix, const Microsoft::MSR::CNTK::MBLayoutPtr& layout, bool readOnly = true);
     };
+
+    template <typename NamedType>
+    inline std::wstring NamedListString(const std::vector<NamedType>& namedList)
+    {
+        std::wstring namedListString;
+        for (auto namedObject : namedList)
+        {
+            if (!namedListString.empty())
+                namedListString += L", ";
+
+            namedListString += namedObject.Name();
+        }
+
+        return namedListString;
+    }
 }
