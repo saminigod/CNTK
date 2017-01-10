@@ -1484,7 +1484,8 @@ void Matrix<ElemType>::SetUniformRandomMask(const ElemType maskRate, const ElemT
                             NOT_IMPLEMENTED);
 }
 
-// Vanilla SGD update
+// Vanilla SGD update. 
+// Modifies "this" parameter matrix, on which this method is invoked.
 template <class ElemType>
 void Matrix<ElemType>::SGDUpdate(Matrix<ElemType>& gradients, ElemType learnRatePerSample)
 {
@@ -1492,11 +1493,14 @@ void Matrix<ElemType>::SGDUpdate(Matrix<ElemType>& gradients, ElemType learnRate
 
     DISPATCH_MATRIX_ON_FLAG(&gradients, nullptr,
     { 
+        // w_t = w_{t-1} - learnRatePerSample * g_{t-1},
         ScaleAndAdd(ElemType(-learnRatePerSample), gradients, *this);
     },
     { 
         // BUGBUG: cannot call ScaleAndAdd(ElemType(-learnRatePerSample), gradients, *this) here,
         // it produces different results from the scale and add below.
+        // g'_{t-1} = learnRatePerSample * g_{t-1}
+        // w_t = w_{t-1} - g'_{t-1}
         Scale(ElemType(learnRatePerSample), gradients);
         *this -= gradients;
     },
@@ -1509,6 +1513,8 @@ void Matrix<ElemType>::SGDUpdate(Matrix<ElemType>& gradients, ElemType learnRate
     
 }
 
+// SGD update with momentum.
+// Modifies "this" parameter matrix, on which this method is invoked.
 template <class ElemType>
 void Matrix<ElemType>::MomentumSGDUpdate(Matrix<ElemType>& gradients,
                                          Matrix<ElemType>& smoothedGradients,
@@ -1522,6 +1528,11 @@ void Matrix<ElemType>::MomentumSGDUpdate(Matrix<ElemType>& gradients,
 
     DISPATCH_MATRIX_ON_FLAG(&gradients, nullptr,
         { 
+            // Classic momentum (unitGainFactor == 1.0):
+            // 1) sg_t = momentum * sg_{t-1} + learnRatePerSample * g_{t-1}
+            // Unit-gain momentum (unitGainFactor == 1.0 - momentum):
+            // 1) sg_t = momentum * sg_{t-1} + learnRatePerSample * (1.0 - momentum) * g_{t-1}
+            // 2) w_t = w_{t-1} - sg_t
             ScaleAndAdd(unitGainFactor * learnRatePerSample, gradients, momentum, smoothedGradients);
             *this -= smoothedGradients;
         },
@@ -1530,6 +1541,13 @@ void Matrix<ElemType>::MomentumSGDUpdate(Matrix<ElemType>& gradients,
             *this -= smoothedGradients;
         },
         { 
+            // The sparse update is slightly different from the dense implementation above:
+            // Classic momentum (unitGainFactor == 1.0):
+            // 1) sg_t = momentum * sg_{t-1} + g_{t-1}
+            // Unit-gain momentum (unitGainFactor == 1.0 - momentum):
+            // 1) sg_t = momentum * sg_{t-1} + (1.0 - momentum) * g_{t-1}
+            // 2) g'_{t-1} = sg_t
+            // 3) w_t = w_{t-1} - learnRatePerSample * g'_{t-1}
             if (momentum != 0)
             {
                 gradients.m_CPUSparseMatrix->NormalGrad(*smoothedGradients.m_CPUMatrix, momentum, unitGainMomentum);
@@ -1545,6 +1563,8 @@ void Matrix<ElemType>::MomentumSGDUpdate(Matrix<ElemType>& gradients,
         });
 }
 
+// Nesterov accelerated SGD update.
+// Modifies "this" parameter matrix, on which this method is invoked.
 template <class ElemType>
 void Matrix<ElemType>::NesterovAcceleratedMomentumSGDUpdate(Matrix<ElemType>& gradients,
                                                             Matrix<ElemType>& smoothedGradients,
@@ -1558,10 +1578,15 @@ void Matrix<ElemType>::NesterovAcceleratedMomentumSGDUpdate(Matrix<ElemType>& gr
 
     DISPATCH_MATRIX_ON_FLAG(&gradients, nullptr,
         { /* CPU dense */
+            // 1) sg_t = momentum * sg_{t-1} + learnRatePerSample * unitGainFactor * g_{t-1}
+            // 2) w'_t = w_{t-1} - momentum * sg_t
+            // 3) w_t = w'_t - learnRatePerSample * unitGainFactor * g_{t-1}
+            // The end result:
+            //  w_t = w_{t-1} - momentum^2 * sg_{t-1} - learnRatePerSample * unitGainFactor * g_{t-1}
+            //  sg_t = momentum * sg_{t-1} + learnRatePerSample * unitGainFactor * g_{t-1}
             ScaleAndAdd( unitGainFactor * learnRatePerSample, gradients, momentum, smoothedGradients);
-            ScaleAndAdd(-momentum,smoothedGradients, *this);
+            ScaleAndAdd(-momentum, smoothedGradients, *this);
             ScaleAndAdd(-unitGainFactor * learnRatePerSample, gradients, *this);
-            // w_t = w_{t-1} - momentum * v_ {t-1} - (1-momentum)*learnRatePerSampele*gradient,
         },
         { /* GPU dense */
             ScaleAndAdd(unitGainFactor * learnRatePerSample, gradients, momentum, smoothedGradients);
@@ -1571,6 +1596,8 @@ void Matrix<ElemType>::NesterovAcceleratedMomentumSGDUpdate(Matrix<ElemType>& gr
         { /* CPU sparse */
             if (momentum != 0)
             {
+                // Identical to the above, except that as a side effect "NormalGrad" modifies 
+                // gradient values in place, so that gradientCache is needed to store the original values.
                 Matrix<ElemType> gradientCache(gradients.GetDeviceId());
                 gradientCache.AssignValuesOf(gradients);
                 gradients.m_CPUSparseMatrix->NormalGrad(*smoothedGradients.m_CPUMatrix, momentum, unitGainMomentum);
