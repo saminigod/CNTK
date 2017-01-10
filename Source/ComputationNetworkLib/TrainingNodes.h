@@ -2595,7 +2595,7 @@ public:
         {
             // The current implementation requires that the gradient of the first operand/input be computed
             // in order to compute gradients for the bias and scale parameters (2nd and 3rd inputs)
-            if ((Input(1)->NeedsGradient() || Input(2)->NeedsGradient()) && !Input(0)->NeedsGradient())
+            if (Environment().IsTraining() && ((Input(1)->NeedsGradient() || Input(2)->NeedsGradient()) && !Input(0)->NeedsGradient()))
                 InvalidArgument("%ls %ls currently supports learnable scale and bias parameters only if the first input also needs gradient (i.e. is dependent on at-least one learnable parameter).", NodeName().c_str(), OperationName().c_str());
 
             if (m_convertRunningVariancePending)
@@ -2654,6 +2654,10 @@ public:
                 if (cpuDevice || cuDnnUnsupportedParams)
                 {
                     m_useCntkEngine = true;
+                    if (cuDnnUnsupportedParams)
+                    {
+                        fprintf(stderr, "\nWARNING: batch normalization falls back to cntk engine for parameters not supported by cuDnn.\n");
+                    }
                 }
             }
 
