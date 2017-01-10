@@ -28,6 +28,7 @@ void ConvolutionEngine<ElemType>::Forward(const Mat& in, const Mat& kernel, Mat&
     EnsureConvolutionInitialized();
     ForwardCore(in, kernel, out, workspace);
 }
+
 template <class ElemType>
 void ConvolutionEngine<ElemType>::BackwardData(const Mat& srcGrad, const Mat& kernel, Mat& grad, bool accumulateGradient, Mat& workspace)
 {
