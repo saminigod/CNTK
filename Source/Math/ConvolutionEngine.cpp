@@ -26,7 +26,6 @@ void ConvolutionEngine<ElemType>::Forward(const Mat& in, const Mat& kernel, Mat&
 
     EnsureCompatible();
     EnsureConvolutionInitialized();
-
     ForwardCore(in, kernel, out, workspace);
 }
 template <class ElemType>

@@ -68,7 +68,6 @@ protected:
         {
             savedMean.Resize(runMean);
             savedInvStdDev.Resize(runMean);
-
             CUDNN_CALL(cudnnBatchNormalizationForwardTraining(*m_cudnn, mode, &C::One, &C::Zero, m_inOutCuDnnT, ptr(in),
                                                               m_inOutCuDnnT, ptr(out), m_scaleBiasCuDnnT, ptr(scale), ptr(bias), expAvgFactor, ptr(runMean), ptr(runVariance),
                                                               epsilon, ptr(savedMean), ptr(savedInvStdDev)));
