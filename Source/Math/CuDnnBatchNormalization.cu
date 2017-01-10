@@ -69,32 +69,9 @@ protected:
             savedMean.Resize(runMean);
             savedInvStdDev.Resize(runMean);
 
-            static int fcount = 0;
-            char szFileName[256];
-            snprintf(szFileName, _countof(szFileName), "BNMats_%d.txt", fcount++);
-            File fdump(std::string(szFileName), fileOptionsText | fileOptionsWrite);
-            fdump << "Mat in\n" << in << "\n";
-            fdump << "Mat scale\n" << scale << "\n";
-            fdump << "Mat bias\n" << bias << "\n";
-            fdump << "Mat runMean\n" << runMean << "\n";
-            fdump << "Mat runVariance\n" << runVariance << "\n";
-            fdump << "Mat out\n" << out << "\n";
-            fdump << "Mat savedMean\n" << savedMean << "\n";
-            fdump << "Mat savedInvStdDev\n" << savedInvStdDev << "\n";
-
             CUDNN_CALL(cudnnBatchNormalizationForwardTraining(*m_cudnn, mode, &C::One, &C::Zero, m_inOutCuDnnT, ptr(in),
                                                               m_inOutCuDnnT, ptr(out), m_scaleBiasCuDnnT, ptr(scale), ptr(bias), expAvgFactor, ptr(runMean), ptr(runVariance),
                                                               epsilon, ptr(savedMean), ptr(savedInvStdDev)));
-
-            fdump << "Mat in\n" << in << "\n";
-            fdump << "Mat scale\n" << scale << "\n";
-            fdump << "Mat bias\n" << bias << "\n";
-            fdump << "Mat runMean\n" << runMean << "\n";
-            fdump << "Mat runVariance\n" << runVariance << "\n";
-            fdump << "Mat out\n" << out << "\n";
-            fdump << "Mat savedMean\n" << savedMean << "\n";
-            fdump << "Mat savedInvStdDev\n" << savedInvStdDev << "\n";
-            fdump.Flush();
         }
     }
 
