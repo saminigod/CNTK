@@ -2516,13 +2516,6 @@ public:
             m_dScale->Resize(scale); // gradients for scale and bias get stored here
             m_dBias->Resize(bias);
 
-            // cuDnn does not prevent NaN propagation so set the values to zero
-            if (!m_useCntkEngine)
-            {
-                m_dScale->SetValue((ElemType)0);
-                m_dBias->SetValue((ElemType)0);
-            }
-
             double blendFactor = ComputeBlendFactor();  // interpolation weight for the running statistics (the current MB statistics are weighted with 1-this)
 
             // Compute all derivatives in one step. Save derivatives with respect to scale and bias in temp matrices.
@@ -2530,22 +2523,20 @@ public:
                               sliceInputGrad,                   // (out) gradient for data input goes here
                               scale,                            // (in)  out of scale and bias, only scale is needed in gradient propagation
                               blendFactor,                      // (in)  smoothing weight for running stats (1=use only running stats)
-                              *m_savedMean, *m_savedInvStdDev,   // (in)  saved mean/invstddev values used in ForwardProp()
+                              *m_savedMean, *m_savedInvStdDev,  // (in)  saved mean/invstddev values used in ForwardProp()
                               *m_dScale, *m_dBias);             // (out) gradients for scale and bias
         }
         else if (inputIndex == 1) // derivative with respect to the scale
         {
             // Derivative with respect to the scale was precomputed during input derivative computation.
             Matrix<ElemType>& grad = Input(1)->Gradient();
-            grad.SetValue(grad.GetNumRows(), grad.GetNumCols(), grad.GetDeviceId(), m_dScale->Data());
-            // BUGBUG: ^^ This should add the gradient, not overwrite it.
+            Matrix<ElemType>::ScaleAndAdd(1, *m_dScale, grad);
         }
         else if (inputIndex == 2) // derivative with respect to the bias
         {
             // Derivative with respect to the bias was precomputed during input derivative computation.
             Matrix<ElemType>& grad = Input(2)->Gradient();
-            grad.SetValue(grad.GetNumRows(), grad.GetNumCols(), grad.GetDeviceId(), m_dBias->Data());
-            // BUGBUG: ^^ Also here, this should add the gradient, not overwrite it.
+            Matrix<ElemType>::ScaleAndAdd(1, *m_dBias, grad);
         }
         // No derivatives with respect to running mean and variance.
     }

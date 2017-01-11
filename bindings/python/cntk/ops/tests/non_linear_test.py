@@ -338,7 +338,6 @@ def test_op_hardmax(sample, device_id, precision):
 @pytest.mark.parametrize("use_cudnn", [True, False])
 @pytest.mark.parametrize("sample", SAMPLES)
 def test_op_batch_normalization(use_cudnn, sample, device_id, precision):
-    set_default_device(cntk_device(device_id))
     dtype = PRECISION_TO_TYPE[precision]
     epsilon = 0.00001
 
